@@ -46,6 +46,9 @@ func TestNewClient(t *testing.T) {
 	m["def"] = "def"
 
 	ms.AppId = MSList[0].AppId
+	if ms.AppId == "" {
+		ms.AppId = "default"
+	}
 	ms.ServiceName = MSList[0].ServiceName
 	ms.Version = MSList[0].Version
 	ms.Environment = MSList[0].Environment
@@ -121,6 +124,7 @@ func TestNewClient(t *testing.T) {
 	t.Run("get all apps, not empty", func(t *testing.T) {
 		apps, err := c.GetAllApplications()
 		assert.NoError(t, err)
+		t.Log(apps)
 		assert.NotEqual(t, 0, len(apps))
 		t.Log(len(apps))
 
