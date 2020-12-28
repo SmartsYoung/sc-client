@@ -1,16 +1,14 @@
 package sc_test
 
 import (
-	"net/http"
-	"os"
-	"testing"
-	"time"
-
 	"github.com/go-chassis/cari/discovery"
-	"github.com/go-chassis/openlog"
 	"github.com/go-chassis/sc-client"
-	"github.com/go-chassis/sc-client/rbacframe"
 	"github.com/stretchr/testify/assert"
+	"testing"
+
+	"github.com/go-chassis/openlog"
+	"os"
+	"time"
 )
 
 func TestNewClient(t *testing.T) {
@@ -46,9 +44,6 @@ func TestNewClient(t *testing.T) {
 	m["def"] = "def"
 
 	ms.AppId = MSList[0].AppId
-	if ms.AppId == "" {
-		ms.AppId = "default"
-	}
 	ms.ServiceName = MSList[0].ServiceName
 	ms.Version = MSList[0].Version
 	ms.Environment = MSList[0].Environment
@@ -124,7 +119,6 @@ func TestNewClient(t *testing.T) {
 	t.Run("get all apps, not empty", func(t *testing.T) {
 		apps, err := c.GetAllApplications()
 		assert.NoError(t, err)
-		t.Log(apps)
 		assert.NotEqual(t, 0, len(apps))
 		t.Log(len(apps))
 
@@ -321,140 +315,4 @@ func TestRegistryClient_FindMicroServiceInstances(t *testing.T) {
 	fs = []*discovery.FindService{}
 	instances, err = registryClient.BatchFindInstances(sid, fs)
 	assert.Equal(t, sc.ErrEmptyCriteria, err)
-}
-
-func TestRBACClient(t *testing.T) {
-	_, err := os.Hostname()
-	if err != nil {
-		openlog.Error("Get hostname failed.")
-		return
-	}
-	c, err := sc.NewClient(
-		sc.Options{
-			Endpoints: []string{"127.0.0.1:30100"},
-		})
-	assert.NoError(t, err)
-
-	opt := &sc.Options{}
-	if !opt.EnableRBAC {
-		// need to start rbac module
-		return
-	}
-	httpHeader := c.GetDefaultHeaders()
-	assert.NotEmpty(t, httpHeader)
-
-	// root account token
-	var token string
-	t.Run("root login", func(t *testing.T) {
-		root_token, err := c.GetToken("root", "Complicated_password1")
-		assert.NoError(t, err)
-		assert.NotEmpty(t, root_token)
-		token = root_token
-	})
-
-	t.Run("create tester role", func(t *testing.T) {
-		devRole := &rbacframe.Role{
-			Name: "tester",
-			Perms: []*rbacframe.Permission{
-				{
-					Resources: []string{"service", "instance"},
-					Verbs:     []string{"get", "create", "update"},
-				},
-			},
-		}
-
-		err := c.RegisterRole(devRole, token)
-		assert.NoError(t, err)
-	})
-
-	t.Run("get tester role", func(t *testing.T) {
-		role, err := c.GetRole("tester", token)
-		assert.NoError(t, err)
-		assert.NotEmpty(t, role.ID)
-	})
-
-	t.Run("get all roles", func(t *testing.T) {
-		roles, err := c.GetAllRoles(token)
-		assert.NoError(t, err)
-		assert.GreaterOrEqual(t, len(roles), 1)
-	})
-
-	t.Run(" create dev_test account and add tester role to dev_test account", func(t *testing.T) {
-		devAccount := &rbacframe.Account{
-			Name:     "dev_test",
-			Password: "Complicated_password2",
-			Roles:    []string{"tester"},
-		}
-
-		err := c.RegisterAccount(devAccount, token)
-		assert.NoError(t, err)
-	})
-
-	t.Run("get dev_test account", func(t *testing.T) {
-		accountId, err := c.GetAccount("dev_test", token)
-		assert.NoError(t, err)
-		assert.NotEmpty(t, accountId)
-	})
-
-	t.Run("get all user account", func(t *testing.T) {
-		account, err := c.GetAllUserAccounts(token)
-		assert.NoError(t, err)
-		assert.GreaterOrEqual(t, len(account), 1)
-	})
-
-	// dev account token
-	var dev_token string
-	t.Run("dev account login", func(t *testing.T) {
-		devToken, err := c.GetToken("dev_test", "Complicated_password2")
-		assert.NoError(t, err)
-		assert.NotEmpty(t, devToken)
-		dev_token = devToken
-	})
-
-	t.Run("dev account has the permission to get microservices", func(t *testing.T) {
-		cli := http.Client{}
-		req, _ := http.NewRequest(http.MethodGet, "http://127.0.0.1:30100/v4/default/registry/microservices", nil)
-		req.Header.Set(sc.HeaderAuth, "Bearer "+dev_token)
-		resp, err := cli.Do(req)
-		assert.NoError(t, err)
-		defer resp.Body.Close()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	})
-
-	t.Run("dev account has no permission to delete microservices", func(t *testing.T) {
-		cli := http.Client{}
-		req, _ := http.NewRequest(http.MethodDelete, "http://127.0.0.1:30100/v4/default/registry/microservices", nil)
-		req.Header.Set(sc.HeaderAuth, "Bearer "+dev_token)
-		resp, err := cli.Do(req)
-		assert.NoError(t, err)
-		defer resp.Body.Close()
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	})
-
-	t.Run("update tester role info", func(t *testing.T) {
-		devRole := &rbacframe.Role{
-			Name: "tester",
-			Perms: []*rbacframe.Permission{
-				{
-					Resources: []string{"instance"},
-					Verbs:     []string{"get", "create", "update"},
-				},
-			},
-		}
-
-		err := c.UpdateRole(devRole, token)
-		assert.NoError(t, err)
-	})
-
-	t.Run("delete tester role info", func(t *testing.T) {
-		res, err := c.UnregisterRole("tester", token)
-		assert.NoError(t, err)
-		assert.Equal(t, true, res)
-	})
-
-	t.Run("delete dev account info", func(t *testing.T) {
-		res, err := c.UnregisterAccount("dev_test", token)
-		assert.NoError(t, err)
-		assert.Equal(t, true, res)
-	})
 }
