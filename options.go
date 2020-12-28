@@ -18,6 +18,7 @@ type Options struct {
 	Compressed bool
 	Verbose    bool
 	Version    string
+	EnableRBAC bool
 }
 
 //CallOptions is options when you call a API

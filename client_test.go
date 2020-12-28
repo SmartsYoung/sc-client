@@ -1,15 +1,11 @@
 package sc_test
 
 import (
-	"github.com/go-chassis/go-archaius"
-	"github.com/go-chassis/go-chassis/v2/security/secret"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/astaxie/beego"
 	"github.com/go-chassis/cari/discovery"
 	"github.com/go-chassis/openlog"
 	"github.com/go-chassis/sc-client"
@@ -324,28 +320,7 @@ func TestRegistryClient_FindMicroServiceInstances(t *testing.T) {
 }
 
 func TestRBACClient(t *testing.T) {
-
-
-	beego.AppConfig.Set("rbac_enabled", "true")
-	beego.AppConfig.Set("rbac_rsa_public_key_file", "./rbac.pub")
-	beego.AppConfig.Set("rbac_rsa_private_key_file", "./private.key")
-
-	err := archaius.Init(archaius.WithMemorySource(), archaius.WithENVSource())
-	assert.NoError(t, err)
-
-	pri, pub, err := secret.GenRSAKeyPair(4096)
-	assert.NoError(t, err)
-
-	b, err := secret.RSAPrivate2Bytes(pri)
-	assert.NoError(t, err)
-	ioutil.WriteFile("./private.key", b, 0600)
-	b, err = secret.RSAPublicKey2Bytes(pub)
-	err = ioutil.WriteFile("./rbac.pub", b, 0600)
-	assert.NoError(t, err)
-
-	archaius.Set("SC_INIT_ROOT_PASSWORD", "Complicated_password1")
-
-	_, err = os.Hostname()
+	_, err := os.Hostname()
 	if err != nil {
 		openlog.Error("Get hostname failed.")
 		return
@@ -356,6 +331,11 @@ func TestRBACClient(t *testing.T) {
 		})
 	assert.NoError(t, err)
 
+	opt := &sc.Options{}
+	if !opt.EnableRBAC {
+		// need to start rbac module
+		return
+	}
 	httpHeader := c.GetDefaultHeaders()
 	assert.NotEmpty(t, httpHeader)
 
